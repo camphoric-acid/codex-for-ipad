@@ -79,7 +79,7 @@ jobs:
           zig="$(jq -r '.tooling.zig' Dependencies/upstreams.json)"
           [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
           [[ "$toolchain" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          [[ "$target" == "i686-unknown-linux-musl" ]]
+          [[ "$target" == "i586-unknown-linux-musl" ]]
           echo "CODEX_REVISION=$revision" >> "$GITHUB_ENV"
           echo "RUST_TOOLCHAIN=$toolchain" >> "$GITHUB_ENV"
           echo "CODEX_TARGET=$target" >> "$GITHUB_ENV"
