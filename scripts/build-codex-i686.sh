@@ -24,6 +24,6 @@ export CFLAGS="${CFLAGS:+$CFLAGS }-DBROKEN_CLANG_ATOMICS"
 cargo zigbuild \
   --locked \
   --release \
-  --target i686-unknown-linux-musl \
+  --target i586-unknown-linux-musl \
   -p codex-app-server \
   --bin codex-app-server
