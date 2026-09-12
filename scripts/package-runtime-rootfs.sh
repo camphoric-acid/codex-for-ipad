@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${CODEX_BINARY:?CODEX_BINARY must point to the i686 app-server}"
+: "${CODEX_BINARY:?CODEX_BINARY must point to the x86 app-server}"
+: "${CODEX_TARGET:?CODEX_TARGET must name the Rust target}"
 : "${OUTPUT_ROOTFS:?OUTPUT_ROOTFS must name the output archive}"
 
 project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -67,7 +68,7 @@ jq -n \
     --arg codexRevision "$codex_revision" \
     --arg ishRevision "$ish_revision" \
     --arg alpineRelease "$alpine_release" \
-    --arg target "i686-unknown-linux-musl" \
+    --arg target "$CODEX_TARGET" \
     '{schemaVersion: 1, codexRevision: $codexRevision, ishRevision: $ishRevision, alpineRelease: $alpineRelease, target: $target}' \
     > "$root_dir/usr/local/share/codexpad/runtime.json"
 sha256sum "$CODEX_BINARY" \

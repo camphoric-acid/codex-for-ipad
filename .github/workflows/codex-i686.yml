@@ -27,6 +27,7 @@ on:
       - ".github/workflows/codex-i686.yml"
       - "Dependencies/upstreams.json"
       - "scripts/build-codex-i686.sh"
+      - "scripts/check-ish-cpu-baseline.sh"
       - "scripts/package-runtime-rootfs.sh"
       - "scripts/validate-codex-protocol.py"
       - "compat/**"
@@ -38,6 +39,7 @@ on:
       - ".github/workflows/codex-i686.yml"
       - "Dependencies/upstreams.json"
       - "scripts/build-codex-i686.sh"
+      - "scripts/check-ish-cpu-baseline.sh"
       - "scripts/package-runtime-rootfs.sh"
       - "scripts/validate-codex-protocol.py"
       - "compat/**"
@@ -54,6 +56,7 @@ jobs:
     timeout-minutes: 90
     outputs:
       codex_revision: ${{ steps.resolve.outputs.codex_revision }}
+      codex_target: ${{ steps.resolve.outputs.codex_target }}
     env:
       CARGO_TARGET_DIR: ${{ github.workspace }}/artifacts/cargo-target
       CARGO_HOME: ${{ github.workspace }}/.codex-local/cargo
@@ -85,6 +88,7 @@ jobs:
           echo "CODEX_TARGET=$target" >> "$GITHUB_ENV"
           echo "ZIG_VERSION=$zig" >> "$GITHUB_ENV"
           echo "codex_revision=$revision" >> "$GITHUB_OUTPUT"
+          echo "codex_target=$target" >> "$GITHUB_OUTPUT"
 
       - name: Fetch pinned Codex source
         shell: bash
@@ -131,8 +135,20 @@ jobs:
         run: |
           set -euo pipefail
           binary="$CARGO_TARGET_DIR/$CODEX_TARGET/release/codex-app-server"
+          build_log="$CARGO_TARGET_DIR/codex-app-server-build.log"
+          cargo tree --locked --manifest-path upstream/codex/codex-rs/Cargo.toml \
+            -p codex-app-server | tee artifacts/codex-app-server.cargo-tree.txt
+          if grep -E '(^|[[:space:]])ring v[0-9]' artifacts/codex-app-server.cargo-tree.txt; then
+            echo "ring remains in the codex-app-server dependency graph" >&2
+            exit 1
+          fi
+          grep -F "Environment Variable found 'AWS_LC_SYS_NO_ASM': '1'" "$build_log"
+          grep -F "Environment Variable found 'AWS_LC_SYS_CMAKE_BUILDER': '1'" "$build_log"
+          grep -F -- '-DOPENSSL_NO_ASM=1' "$build_log"
           file "$binary" | tee artifacts/codex-app-server.file.txt
           test "$(od -An -tu1 -j4 -N1 "$binary" | tr -d ' ')" = "1"
+          scripts/check-ish-cpu-baseline.sh \
+            "$binary" artifacts/codex-app-server.cpu-baseline.txt
           sha256sum "$binary" | tee artifacts/codex-app-server.sha256
           find upstream/codex/codex-rs/app-server-protocol/schema \
             -type f -print0 | sort -z | xargs -0 sha256sum \
@@ -149,8 +165,11 @@ jobs:
             "$bundle/codex-app-server"
           cp artifacts/codex-app-server.sha256 \
             artifacts/codex-app-server.file.txt \
+            artifacts/codex-app-server.cpu-baseline.txt \
+            artifacts/codex-app-server.cargo-tree.txt \
             artifacts/app-server-protocol.sha256 \
             "$bundle/"
+          cp "$CARGO_TARGET_DIR/codex-app-server-build.log" "$bundle/"
 
       - name: Upload verified app-server
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -168,6 +187,7 @@ jobs:
     timeout-minutes: 20
     env:
       CODEX_REVISION: ${{ needs.app-server.outputs.codex_revision }}
+      CODEX_TARGET: ${{ needs.app-server.outputs.codex_target }}
 
     steps:
       - name: Check out CodexPad
@@ -221,7 +241,8 @@ jobs:
             | grep -E '^\./(etc/init\.d/codexpad|etc/runlevels/default/codexpad|usr/local/libexec/codexpad/codex-app-server|usr/bin/git|usr/bin/rg)$'
           tar -xOf artifacts/runtime/codexpad-rootfs.tar.gz \
             ./usr/local/share/codexpad/runtime.json | jq -e \
-            --arg revision "$CODEX_REVISION" '.codexRevision == $revision'
+            --arg revision "$CODEX_REVISION" --arg target "$CODEX_TARGET" \
+            '.codexRevision == $revision and .target == $target'
 
       - name: Upload iSH runtime
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

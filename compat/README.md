@@ -1,10 +1,12 @@
-# Codex i686 compatibility layer
+# Codex iSH x86 compatibility layer
 
-CodexPad builds upstream Codex for iSH's `i686-unknown-linux-musl` guest. The
+CodexPad builds upstream Codex for iSH's `i586-unknown-linux-musl` guest. This
+is Rust's original-Pentium baseline and, unlike the i686 target, does not make
+SSE2 part of the ABI. The
 compatibility patch is intentionally small and applied only in the hosted build
 checkout; the sibling/upstream Codex repository is never modified in place.
 
-The layer currently does five target-specific things:
+The layer currently does seven target-specific things:
 
 1. builds OpenSSL from source and selects BLAKE3's portable implementation;
 2. excludes Rusty V8 on 32-bit musl because upstream publishes no matching V8
@@ -17,7 +19,14 @@ The layer currently does five target-specific things:
    approvals `on-request`, and relies on the iPad application container as the
    operating-system boundary; and
 5. selects OpenSSL's built-in lock fallback because Zig's i386 musl runtime
-   does not export the `__atomic_is_lock_free` probe used for 64-bit atomics.
+   does not export the `__atomic_is_lock_free` probe used for 64-bit atomics;
+6. replaces `ring` with jsonwebtoken's AWS-LC backend and builds AWS-LC with
+   `OPENSSL_NO_ASM`. Only `aws-lc-sys` is compiled at optimization level zero,
+   as required by its CMake builder; and
+7. disables `aws-config`'s `sso` feature. Environment variables, shared
+   credentials/config files, credential-process, web identity, ECS, EC2 IMDS,
+   and Codex's AWS login credential flow remain available, but AWS IAM Identity
+   Center/SSO profiles are intentionally unavailable in the iSH build.
 
 Normal Codex app-server operation, tools, approvals, MCP, threads, and turns use
 the upstream implementation. Weekly update pull requests must apply this patch,
@@ -33,3 +42,7 @@ container: approved tools can access everything exposed in its root.
 
 Delete the OpenSSL compiler guard when the i386 musl linker supplies the atomic
 probe or OpenSSL no longer emits it on this target.
+
+Delete the AWS-LC no-assembly settings and SSO tradeoff only if iSH gains the
+required SSE/SSE2 support or the affected crypto crates gain another supported
+non-SSE i586 implementation.

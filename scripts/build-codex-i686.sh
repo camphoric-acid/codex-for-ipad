@@ -2,6 +2,12 @@
 set -euo pipefail
 
 : "${CARGO_TARGET_DIR:?CARGO_TARGET_DIR must point to workspace storage}"
+: "${CODEX_TARGET:=i586-unknown-linux-musl}"
+
+if [[ "$CODEX_TARGET" != "i586-unknown-linux-musl" ]]; then
+  echo "unsupported CodexPad target: $CODEX_TARGET" >&2
+  exit 1
+fi
 
 project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 compatibility_patch="$project_root/patches/codex-i686-musl-openssl.patch"
@@ -21,9 +27,18 @@ install -m 0644 \
 # upstream-supported guard selects OpenSSL's existing RWLock fallback instead.
 export CFLAGS="${CFLAGS:+$CFLAGS }-DBROKEN_CLANG_ATOMICS"
 
-cargo zigbuild \
+# aws-lc-sys 0.39's CMake builder honors NO_ASM only at OPT_LEVEL=0. The
+# compatibility patch applies that optimization level to aws-lc-sys alone.
+export AWS_LC_SYS_CMAKE_BUILDER=1
+export AWS_LC_SYS_NO_ASM=1
+
+mkdir -p "$CARGO_TARGET_DIR"
+build_log="$CARGO_TARGET_DIR/codex-app-server-build.log"
+
+cargo zigbuild -vv \
   --locked \
   --release \
-  --target i586-unknown-linux-musl \
+  --target "$CODEX_TARGET" \
   -p codex-app-server \
-  --bin codex-app-server
+  --bin codex-app-server \
+  2>&1 | tee "$build_log"
